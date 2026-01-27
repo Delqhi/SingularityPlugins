@@ -1,0 +1,349 @@
+# 🚀 SIN-SOLVER: DAS HAUS (CEO EMPIRE STATE EDITION 2026)
+# Standard: Enterprise Browser Automation (Steel + Vision + SurfSense)
+
+services:
+  # ==========================================
+  # EBENE 5: INFRASTRUKTUR (Fundament)
+  # ==========================================
+  
+  zimmer-speicher-redis:
+    image: redis:7.2-alpine
+    container_name: Zimmer-Speicher-Redis
+    command: redis-server --save 60 1 --loglevel warning
+    ports: ["6379:6379"]
+    volumes: [redis_data:/data]
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.10
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  zimmer-archiv-postgres:
+    image: postgres:15-alpine
+    container_name: Zimmer-Archiv-Postgres
+    environment:
+      POSTGRES_DB: sin_solver_production
+      POSTGRES_USER: ceo_admin
+      POSTGRES_PASSWORD: secure_ceo_password_2026
+    ports: ["5432:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.11
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ceo_admin -d sin_solver_production"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  zimmer-10-postgres-bibliothek:
+    image: postgres:15-alpine
+    container_name: Zimmer-10-Postgres-Bibliothek
+    environment:
+      POSTGRES_DB: knowledge_base
+      POSTGRES_USER: librarian
+      POSTGRES_PASSWORD: secure-knowledge-2026
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.12
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U librarian -d knowledge_base"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ==========================================
+  # EBENE 4: BROWSER (The Muscle)
+  # ==========================================
+
+  zimmer-05-steel-tarnkappe:
+    image: ghcr.io/steel-dev/steel-browser:latest
+    container_name: Zimmer-05-Steel-Tarnkappe
+    ports: 
+      - "3000:3000"
+      - "9222:9222"
+    environment:
+      PORT: 3000
+      DEBUGGER_PORT: 9222
+      STEALTH_MODE: "true"
+      CONCURRENCY: 10
+    volumes:
+      - steel_data:/home/pptruser/.config/google-chrome
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.20
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 3000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ==========================================
+  # EBENE 3: MANAGEMENT & WORKFLOW
+  # ==========================================
+
+  zimmer-01-n8n-manager:
+    image: n8nio/n8n:latest
+    container_name: Zimmer-01-n8n-Manager
+    ports: ["5678:5678"]
+    environment:
+      N8N_SECURE_COOKIE: "false"
+      N8N_BLOCK_IFRAMES: "false"
+      N8N_EDITOR_BASE_URL: http://192.168.178.21:5678/
+      N8N_USE_SAMESITE_COOKIE: "none"
+      WEBHOOK_URL: http://192.168.178.21:5678/
+    volumes: [n8n_data:/home/node/.n8n]
+    networks:
+      haus-netzwerk:
+      ipv4_address: 172.20.0.30
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  zimmer-13-api-koordinator:
+    build:
+      context: ./services/zimmer-13-api-coordinator
+      dockerfile: Dockerfile
+    container_name: Zimmer-13-API-Koordinator
+    env_file: .env
+    environment:
+      POSTGRES_URL: postgresql://ceo_admin:secure_ceo_password_2026@zimmer-archiv-postgres:5432/sin_solver_production
+      REDIS_URL: redis://zimmer-speicher-redis:6379
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-default-key-change}
+      JWT_SECRET: ${JWT_SECRET:-default-jwt-secret-change}
+    ports: ["8000:8000"]
+    depends_on:
+      zimmer-speicher-redis: { condition: service_healthy }
+      zimmer-archiv-postgres: { condition: service_healthy }
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.31
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ==========================================
+  # EBENE 2: INTERFACES
+  # ==========================================
+
+  zimmer-11-dashboard-zentrale:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.frontend
+    container_name: Zimmer-11-Dashboard-Zentrale
+    ports: ["3001:3000"]
+    environment:
+      NEXT_PUBLIC_API_URL: http://192.168.178.21:8080
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.40
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 3000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  zimmer-04-opencode-sekretaer:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.frontend
+    container_name: Zimmer-04-OpenCode-Sekretaer
+    ports: ["3002:3000"]
+    environment:
+      WORKSPACE_PATH: /app
+    volumes: [.:/app]
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.41
+
+  # ==========================================
+  # EBENE 1: AGENTS & WORKERS
+  # ==========================================
+
+  zimmer-03-agentzero-chefcoder:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.agentzero
+    container_name: Zimmer-03-AgentZero-ChefCoder
+    command: python app/core/CEO_STEEL_MASTER_WORKER.py
+    ports: ["5001:8000"]
+    environment:
+      PYTHONPATH: .
+      ROLE: master_agent
+      STEEL_CDP_URL: ws://172.20.0.20:3000/
+      DATABASE_URL: postgresql+asyncpg://ceo_admin:secure_ceo_password_2026@172.20.0.11:5432/sin_solver_production
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.50
+
+  zimmer-06-skyvern-auge:
+    image: skyvern/skyvern:latest
+    container_name: Zimmer-06-Skyvern-Auge
+    ports: ["8002:8000"]
+    environment:
+      DATABASE_STRING: postgresql+asyncpg://librarian:secure-knowledge-2026@172.20.0.12:5432/knowledge_base
+      BROWSER_TYPE: cdp-connect
+      BROWSER_URL: http://172.20.0.20:3000
+      LLM_KEY: OPENAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    depends_on:
+      zimmer-10-postgres-bibliothek: { condition: service_healthy }
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.51
+
+  zimmer-07-stagehand-detektiv:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    container_name: Zimmer-07-Stagehand-Detektiv
+    command: python app/core/CEO_STEEL_MASTER_WORKER.py
+    ports: ["8003:8000"]
+    environment:
+      ROLE: researcher
+      PYTHONPATH: .
+      STEEL_CDP_URL: ws://172.20.0.20:3000/
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.54
+
+  zimmer-14-worker-arbeiter:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    command: python app/core/CEO_STEEL_MASTER_WORKER.py
+    restart: always
+    environment:
+      ROLE: worker
+      PYTHONPATH: .
+      STEEL_CDP_URL: ws://172.20.0.20:3000/
+      ORCHESTRATOR_URL: http://172.20.0.31:8000
+      CONCURRENT_MISSIONS: 3
+    networks: [haus-netzwerk]
+    deploy:
+      replicas: 5
+
+  zimmer-02-chronos-stratege:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.api
+    container_name: Zimmer-02-Chronos-Stratege
+    command: python app/main.py
+    environment:
+      PYTHONPATH: .
+      ROLE: analyzer
+      STEEL_CDP_URL: ws://172.20.0.20:3000/
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.52
+
+  zimmer-09-clawdbot-bote:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    container_name: Zimmer-09-ClawdBot-Bote
+    command: python app/core/CEO_STEEL_MASTER_WORKER.py
+    ports: ["8004:8000"]
+    environment:
+      ROLE: messenger
+      PYTHONPATH: .
+      STEEL_CDP_URL: ws://172.20.0.20:3000/
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.55
+
+  # Zimmer 08: QA-Prüfer (QA-Logic)
+  zimmer-08-qa-pruefer:
+    image: python:3.11-slim
+    container_name: Zimmer-08-QA-Pruefer
+    command: ["tail", "-f", "/dev/null"]
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.56
+
+  # Zimmer 17: SIN-Plugins (Singularity Plugins MCP)
+  zimmer-17-sin-plugins:
+    build:
+      context: ./infrastructure/zimmer-17-plugins
+      dockerfile: ../docker/Dockerfile.singularity-plugins
+    container_name: Zimmer-17-SIN-Plugins
+    ports: ["8006:8000"]
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.57
+
+  zimmer-12-evolution-optimizer:
+    image: python:3.11-slim
+    container_name: Zimmer-12-Evolution-Optimizer
+    command: ["tail", "-f", "/dev/null"]
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.53
+
+  # Zimmer 15 (AI Research Knowledge Base)
+  zimmer-15-surfsense-archiv:
+    image: ghcr.io/modsetter/surfsense:latest
+    container_name: Zimmer-15-SurfSense-Archiv
+    ports: ["3003:3000", "8000:8000"]
+    environment:
+      NEXT_PUBLIC_BACKEND_URL: http://192.168.178.21:8000
+    volumes:
+      - surfsense_data:/data
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.60
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 3000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Zimmer 16: Supabase Studio (Database GUI)
+  zimmer-16-supabase-studio:
+    image: supabase/studio:latest
+    container_name: Zimmer-16-Supabase-Studio
+    ports: ["3004:3000"]
+    environment:
+      STUDIO_PG_META_URL: http://zimmer-16-pg-meta:8080/pg
+      POSTGRES_PASSWORD: secure_ceo_password_2026
+      SUPABASE_URL: http://172.20.0.11:8000
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.70
+
+  # Zimmer 16.1: PG-META (Requirement for Studio)
+  zimmer-16-pg-meta:
+    image: supabase/postgres-meta:v0.95.1
+    container_name: Zimmer-16-PG-Meta
+    environment:
+      PG_META_DB_URL: postgres://ceo_admin:secure_ceo_password_2026@172.20.0.11:5432/sin_solver_production
+    networks:
+      haus-netzwerk:
+        ipv4_address: 172.20.0.71
+
+  # Zimmer 99: Terminal Removed for stability during initialization
+
+networks:
+  haus-netzwerk:
+    name: haus-netzwerk
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis_data:
+  postgres_data:
+  knowledge_data:
+  n8n_data:
+  surfsense_data:
+  steel_data:
