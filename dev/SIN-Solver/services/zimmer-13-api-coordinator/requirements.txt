@@ -18,4 +18,4 @@ sqlalchemy-utils==0.41.1
 alembic==1.12.1
 pytest==7.4.3
 pytest-asyncio==0.21.1
-PyJWT==2.8.1
+PyJWT==2.10.1
