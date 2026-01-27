@@ -15,24 +15,29 @@ export class LSTMModel {
   async initializeModel(sequenceLength: number = 100, featureDim: number = 4): Promise<tf.LayersModel> {
     const input = tf.input({ shape: [sequenceLength, featureDim] });
 
+    // Use simpler initialization for faster test execution
     const lstm1 = tf.layers.lstm({
-      units: 64,
+      units: 32,  // Reduced from 64
       returnSequences: true,
-      activation: 'relu'
+      activation: 'relu',
+      kernelInitializer: 'glorotUniform',  // Faster than orthogonal
+      recurrentInitializer: 'orthogonal'
     }).apply(input) as tf.SymbolicTensor;
 
     const dropout1 = tf.layers.dropout({ rate: 0.2 }).apply(lstm1) as tf.SymbolicTensor;
 
     const lstm2 = tf.layers.lstm({
-      units: 32,
+      units: 16,  // Reduced from 32
       returnSequences: false,
-      activation: 'relu'
+      activation: 'relu',
+      kernelInitializer: 'glorotUniform',
+      recurrentInitializer: 'orthogonal'
     }).apply(dropout1) as tf.SymbolicTensor;
 
     const dropout2 = tf.layers.dropout({ rate: 0.2 }).apply(lstm2) as tf.SymbolicTensor;
 
     const dense = tf.layers.dense({
-      units: 16,
+      units: 8,  // Reduced from 16
       activation: 'relu'
     }).apply(dropout2) as tf.SymbolicTensor;
 
